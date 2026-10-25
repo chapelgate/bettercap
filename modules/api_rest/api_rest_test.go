@@ -513,11 +513,74 @@ func TestCheckAuthNoCredentials(t *testing.T) {
 	s := createMockSession(t)
 	mod := NewRestAPI(s)
 
-	// No username/password set - should allow access
 	req, _ := http.NewRequest("GET", "/test", nil)
 
-	if !mod.checkAuth(req) {
-		t.Error("Expected auth to pass with no credentials set")
+	if mod.checkAuth(req) {
+		t.Error("Expected auth to fail when credentials are unset")
+	}
+}
+
+func TestConfigureRequiresExplicitCredentials(t *testing.T) {
+	s := createMockSession(t)
+	mod := NewRestAPI(s)
+
+	s.Env.Set("api.rest.address", "127.0.0.1")
+	s.Env.Set("api.rest.port", "8081")
+	s.Env.Set("api.rest.username", "")
+	s.Env.Set("api.rest.password", "")
+
+	err := mod.Configure()
+	if err == nil {
+		t.Fatal("expected configure to fail without credentials")
+	}
+}
+
+func TestConfigureRejectsWellKnownCredentials(t *testing.T) {
+	s := createMockSession(t)
+	mod := NewRestAPI(s)
+
+	s.Env.Set("api.rest.address", "127.0.0.1")
+	s.Env.Set("api.rest.port", "8081")
+	s.Env.Set("api.rest.username", "user")
+	s.Env.Set("api.rest.password", "pass")
+
+	err := mod.Configure()
+	if err == nil {
+		t.Fatal("expected configure to reject the well-known credentials")
+	}
+}
+
+func TestConfigureRejectsNonLoopback(t *testing.T) {
+	s := createMockSession(t)
+	mod := NewRestAPI(s)
+
+	s.Env.Set("api.rest.address", "192.168.1.100")
+	s.Env.Set("api.rest.port", "8081")
+	s.Env.Set("api.rest.username", "operator")
+	s.Env.Set("api.rest.password", "not-the-old-default")
+
+	err := mod.Configure()
+	if err == nil {
+		t.Fatal("expected configure to reject a non-loopback address")
+	}
+}
+
+func TestConfigureAllowsLoopbackWithExplicitCredentials(t *testing.T) {
+	s := createMockSession(t)
+	mod := NewRestAPI(s)
+
+	s.Env.Set("api.rest.address", "127.0.0.1")
+	s.Env.Set("api.rest.port", "8081")
+	s.Env.Set("api.rest.username", "operator")
+	s.Env.Set("api.rest.password", "not-the-old-default")
+	s.Env.Set("api.rest.certificate", "")
+	s.Env.Set("api.rest.key", "")
+
+	if err := mod.Configure(); err != nil {
+		t.Fatalf("configure failed: %v", err)
+	}
+	if mod.server.Addr != "127.0.0.1:8081" {
+		t.Fatalf("server addr = %s", mod.server.Addr)
 	}
 }
 

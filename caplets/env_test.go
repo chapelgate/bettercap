@@ -229,8 +229,8 @@ func TestConstants(t *testing.T) {
 		t.Errorf("expected Suffix to be '.cap', got %s", Suffix)
 	}
 
-	if InstallArchive != "https://github.com/bettercap/caplets/archive/master.zip" {
-		t.Errorf("unexpected InstallArchive value: %s", InstallArchive)
+	if InstallArchive != "" {
+		t.Errorf("InstallArchive must stay empty, got %s", InstallArchive)
 	}
 }
 

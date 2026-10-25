@@ -2,8 +2,6 @@ package caplets
 
 import (
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 
 	"github.com/bettercap/bettercap/v2/caplets"
@@ -13,7 +11,6 @@ import (
 
 	"github.com/evilsocket/islazy/fs"
 	"github.com/evilsocket/islazy/tui"
-	"github.com/evilsocket/islazy/zip"
 )
 
 type CapletsModule struct {
@@ -38,7 +35,7 @@ func NewCapletsModule(s *session.Session) *CapletsModule {
 		}))
 
 	mod.AddHandler(session.NewModuleHandler("caplets.update", "",
-		"Install/updates the caplets.",
+		"Install caplets from a pinned HTTPS archive. Off unless BETTERCAP_CAPLETS_REMOTE_UPDATE=1 with a pinned URL and SHA-256.",
 		func(args []string) error {
 			return mod.Update()
 		}))
@@ -73,7 +70,7 @@ func (mod *CapletsModule) Start() error {
 func (mod *CapletsModule) Show() error {
 	caplets := caplets.List()
 	if len(caplets) == 0 {
-		return fmt.Errorf("no installed caplets on this system, use the caplets.update command to download them")
+		return fmt.Errorf("no installed caplets on this system; remote update is off unless explicitly enabled")
 	}
 
 	colNames := []string{
@@ -113,38 +110,23 @@ func (mod *CapletsModule) Paths() error {
 }
 
 func (mod *CapletsModule) Update() error {
+	src, err := caplets.AuthorizeRemoteUpdate()
+	if err != nil {
+		return err
+	}
+
 	if !fs.Exists(caplets.InstallBase) {
 		mod.Info("creating caplets install path %s ...", caplets.InstallBase)
-		if err := os.MkdirAll(caplets.InstallBase, os.ModePerm); err != nil {
+		if err = os.MkdirAll(caplets.InstallBase, 0755); err != nil {
 			return err
 		}
 	}
 
-	out, err := os.Create(caplets.ArchivePath)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	mod.Info("downloading caplets from %s ...", caplets.InstallArchive)
-
-	resp, err := http.Get(caplets.InstallArchive)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if _, err := io.Copy(out, resp.Body); err != nil {
+	mod.Info("downloading pinned caplets %s ...", src.Ref)
+	if err = caplets.DownloadAndInstall(src, caplets.InstallBase, caplets.InstallPath, caplets.ArchivePath); err != nil {
 		return err
 	}
 
-	mod.Info("installing caplets to %s ...", caplets.InstallPath)
-
-	if _, err = zip.Unzip(caplets.ArchivePath, caplets.InstallBase); err != nil {
-		return err
-	}
-
-	os.RemoveAll(caplets.InstallPath)
-
-	return os.Rename(caplets.InstallPathArchive, caplets.InstallPath)
+	mod.Info("installed caplets to %s", caplets.InstallPath)
+	return nil
 }

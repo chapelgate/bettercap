@@ -3,6 +3,7 @@ package api_rest
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -78,7 +79,7 @@ func NewRestAPI(s *session.Session) *RestAPI {
 	mod.AddParam(session.NewStringParameter("api.rest.address",
 		"127.0.0.1",
 		session.IPv4Validator,
-		"Address to bind the API REST server to."))
+		"Loopback address to bind the API REST server to."))
 
 	mod.AddParam(session.NewIntParameter("api.rest.port",
 		"8081",
@@ -90,14 +91,14 @@ func NewRestAPI(s *session.Session) *RestAPI {
 		"Value of the Access-Control-Allow-Origin header of the API server."))
 
 	mod.AddParam(session.NewStringParameter("api.rest.username",
-		"user",
 		"",
-		"API authentication username."))
+		"",
+		"API authentication username. Required. There is no default."))
 
 	mod.AddParam(session.NewStringParameter("api.rest.password",
-		"pass",
 		"",
-		"API authentication password."))
+		"",
+		"API authentication password. Required. There is no default."))
 
 	mod.AddParam(session.NewStringParameter("api.rest.certificate",
 		"",
@@ -211,6 +212,16 @@ func (mod *RestAPI) Configure() error {
 		return err
 	}
 
+	if ipAddr := net.ParseIP(ip); ipAddr == nil || !ipAddr.IsLoopback() {
+		return fmt.Errorf("api.rest.address must be a loopback address")
+	}
+	if mod.username == "" || mod.password == "" {
+		return fmt.Errorf("api.rest.username and api.rest.password must both be set")
+	}
+	if mod.username == "user" && mod.password == "pass" {
+		return fmt.Errorf("api.rest refuses the well-known credentials")
+	}
+
 	if mod.isTLS() {
 		if !fs.Exists(mod.certFile) || !fs.Exists(mod.keyFile) {
 			cfg, err := tls.CertConfigFromModule("api.rest", mod.SessionModule)
@@ -259,10 +270,6 @@ func (mod *RestAPI) Configure() error {
 	router.HandleFunc("/api/session/wifi/{mac}", mod.sessionRoute)
 
 	mod.server.Handler = router
-
-	if mod.username == "" || mod.password == "" {
-		mod.Warning("api.rest.username and/or api.rest.password parameters are empty, authentication is disabled.")
-	}
 
 	return nil
 }

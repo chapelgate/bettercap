@@ -57,16 +57,16 @@ func (mod *RestAPI) setSecurityHeaders(w http.ResponseWriter) {
 }
 
 func (mod *RestAPI) checkAuth(r *http.Request) bool {
-	if mod.username != "" && mod.password != "" {
-		user, pass, _ := r.BasicAuth()
-		// timing attack my ass
-		if subtle.ConstantTimeCompare([]byte(user), []byte(mod.username)) != 1 {
-			return false
-		} else if subtle.ConstantTimeCompare([]byte(pass), []byte(mod.password)) != 1 {
-			return false
-		}
+	if mod.username == "" || mod.password == "" {
+		return false
 	}
-	return true
+	user, pass, ok := r.BasicAuth()
+	if !ok {
+		return false
+	}
+	userOK := subtle.ConstantTimeCompare([]byte(user), []byte(mod.username)) == 1
+	passOK := subtle.ConstantTimeCompare([]byte(pass), []byte(mod.password)) == 1
+	return userOK && passOK
 }
 
 func (mod *RestAPI) patchFrame(buf []byte) (frame map[string]interface{}, err error) {

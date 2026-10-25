@@ -1,0 +1,22 @@
+name: Chapelgate provenance
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  provenance:
+    runs-on: [self-hosted, estate]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - name: Setup Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.26.x"
+      - name: Compile and record sha256
+        run: sh scripts/chapelgate-provenance.sh
